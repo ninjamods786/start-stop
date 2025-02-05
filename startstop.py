@@ -1,6 +1,5 @@
 import subprocess
 import json
-import os
 import random
 import string
 import datetime
@@ -14,6 +13,10 @@ KEY_FILE = "keys.json"
 # Dictionary to hold flooding processes for each user
 flooding_processes = {}
 flooding_command = None
+
+# Cooldown tracking
+cooldown_period = 120  # Cooldown period in seconds
+last_attack_time = {}
 
 DEFAULT_THREADS = 1000
 BYTE_SIZE = 8
@@ -121,7 +124,7 @@ async def allusers(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             for user_id, expiration_date in users.items():
                 try:
                     user_info = await context.bot.get_chat(int(user_id))
-                    username = user_info.username if user_info.username else f"User ID: {user_id}"
+                    username = user_info.username if user_info.username else f"User  ID: {user_id}"
                     response += f"- @{username} (ID: {user_id}) expires on {expiration_date}\n"
                 except Exception:
                     response += f"- User ID: {user_id} expires on {expiration_date}\n"
@@ -158,6 +161,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("❌ Access expired or unauthorized. Please redeem a valid key.")
         return
 
+    current_time = datetime.datetime.now()
+    if user_id in last_attack_time:
+        elapsed_time = (current_time - last_attack_time[user_id]).total_seconds()
+        if elapsed_time < cooldown_period:
+            remaining_time = cooldown_period - elapsed_time
+            await update.message.reply_text(f"⏳ You must wait {int(remaining_time)} seconds before starting another attack.")
+            return
+
     if user_id in flooding_processes and flooding_processes[user_id] is not None:
         await update.message.reply_text('❌𝐀𝐓𝐓𝐀𝐂𝐊 𝐀𝐋𝐑𝐄𝐀𝐃𝐘 𝐑𝐔𝐍𝐍𝐈𝐍𝐆❌.')
         return
@@ -168,6 +179,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     flooding_process = subprocess.Popen(flooding_command)
     flooding_processes[user_id] = flooding_process
+    last_attack_time[user_id] = current_time  # Update last attack time
     await update.message.reply_text('🚀𝑨𝑻𝑻𝑨𝑪𝑲 𝑺𝑻𝑨𝑹𝑻𝑬𝑫...🚀')
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
